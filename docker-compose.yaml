@@ -1,0 +1,22 @@
+services:
+  db:
+    build: ./docker/pql
+    restart: always
+    # set shared memory limit when using docker compose
+    shm_size: 1g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: example
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "postgres"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
