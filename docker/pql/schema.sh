@@ -4,7 +4,7 @@
 psql $POSTGRES_DB << EOF
 CREATE EXTENSION vector;
 
-CREATE TABLE IF NOT EXISTS arxiv_meta (
+CREATE TABLE IF NOT EXISTS $POSTGRES_ARXIV_TABLE (
     id bigserial PRIMARY KEY,
     title text NOT NULL,
     abstract text NOT NULL,
@@ -13,4 +13,10 @@ CREATE TABLE IF NOT EXISTS arxiv_meta (
 );
 
 CREATE INDEX fts_idx ON arxiv_meta USING GIN (fts);
+
+CREATE TABLE IF NOT EXISTS $POSTGRES_RESUMABLES_TABLE (
+    id text PRIMARY KEY,
+    value text NOT NULL,
+    expire_date TIMESTAMPTZ
+);
 EOF
