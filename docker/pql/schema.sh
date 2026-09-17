@@ -6,6 +6,7 @@ CREATE EXTENSION vector;
 
 CREATE TABLE IF NOT EXISTS $POSTGRES_ARXIV_TABLE (
     id text PRIMARY KEY,
+    datestamp TEXT NOT NULL,
     title text NOT NULL,
     abstract text NOT NULL,
     embedding vector($EMBEDDING_MODEL_DIM) NOT NULL,
