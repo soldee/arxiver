@@ -5,7 +5,7 @@ psql $POSTGRES_DB << EOF
 CREATE EXTENSION vector;
 
 CREATE TABLE IF NOT EXISTS $POSTGRES_ARXIV_TABLE (
-    id bigserial PRIMARY KEY,
+    id text PRIMARY KEY,
     title text NOT NULL,
     abstract text NOT NULL,
     embedding vector($EMBEDDING_MODEL_DIM) NOT NULL,

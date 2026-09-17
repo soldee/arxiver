@@ -1,17 +1,17 @@
 from config import cfg
-import psycopg2
 import requests
 from xml.etree import ElementTree as ET
 import logging
 
 class Paper:
-    def __init__(self, datestamp, title: str, abstract: str):
+    def __init__(self, id: str, datestamp, title: str, abstract: str):
+        self.id = id
         self.datestamp = datestamp
         self.title = title
         self.abstract = abstract
 
 
-class Ingestor:
+class ArxivOaiFetcher:
 
     def __init__(self, conn):
         self.conn = conn
@@ -19,9 +19,9 @@ class Ingestor:
         self.resume_token: str | None = None
         self.last_datestamp: str | None = None
 
-        self.__fetch_resume_token__()
+        self._fetch_resume_token()
 
-    def __fetch_resume_token__(self):
+    def _fetch_resume_token(self):
         self.logger.info('Fetching resumables...')
 
         cur = self.conn.cursor()
@@ -51,7 +51,7 @@ class Ingestor:
                 self.logger.info('Resuming from last_datestamp: %s', self.last_datestamp)
 
 
-    def __upsert_resume_token__(self, resume_token, expire_date):
+    def _upsert_resume_token(self, resume_token, expire_date):
         self.logger.info('Upserting resumable resume_token=%s with expire_date=%s', resume_token, expire_date)
 
         cur = self.conn.cursor()
@@ -65,7 +65,7 @@ class Ingestor:
         self.conn.commit()
         cur.close()
 
-    def __upsert_datestamp__(self, datestamp):
+    def _upsert_datestamp(self, datestamp):
         self.logger.info('Upserting resumable datestamp=%s', datestamp)
 
         cur = self.conn.cursor()
@@ -79,7 +79,7 @@ class Ingestor:
         self.conn.commit()
         cur.close()
 
-    def __expire_datestamp__(self):
+    def _expire_datestamp(self):
         cur = self.conn.cursor()
         cur.execute(f"""
             DELETE FROM {cfg.POSTGRES_RESUMABLES_TABLE} WHERE id = 'last_datestamp'
@@ -99,8 +99,7 @@ class Ingestor:
             params = {
                 'verb':'ListRecords', 
                 'set':'cs:cs:AI', 
-                'metadataPrefix':'arXiv',
-                'from': self.last_datestamp
+                'metadataPrefix':'arXiv'
             }
             if self.last_datestamp is not None:
                 params["from"] = self.last_datestamp
@@ -108,7 +107,7 @@ class Ingestor:
         try:
             res = requests.get(url, params=params, timeout=120, stream=True)
             res.raise_for_status()
-            return self.__parse_stream__(res)
+            return self._parse_stream(res)
         except requests.exceptions.Timeout as err:
             self.logger.error("Request timed out: %s", str(err))
         except requests.exceptions.HTTPError as err:
@@ -119,7 +118,7 @@ class Ingestor:
         return []
 
 
-    def __parse_stream__(self, response):
+    def _parse_stream(self, response):
         namespaces = {
             'arxiv': 'http://arxiv.org/OAI/arXiv/',
             'oai':'http://www.openarchives.org/OAI/2.0/'
@@ -146,15 +145,12 @@ class Ingestor:
                             elem.clear()
                             continue
 
-                        datestamp_node = elem.find("./oai:header/oai:datestamp", namespaces)
-                        title_node = elem.find(".//arxiv:title", namespaces)
-                        abstract_node = elem.find(".//arxiv:abstract", namespaces)
+                        datestamp = elem.findtext("./oai:header/oai:datestamp", default="", namespaces=namespaces)
+                        id = elem.findtext(".//arxiv:id", default="", namespaces=namespaces)
+                        title = elem.findtext(".//arxiv:title", default="", namespaces=namespaces)
+                        abstract = elem.findtext(".//arxiv:abstract", default="", namespaces=namespaces)
 
-                        datestamp = datestamp_node.text if datestamp_node is not None else ""
-                        title = title_node.text.strip() if title_node is not None and title_node.text else ""
-                        abstract = abstract_node.text.strip() if abstract_node is not None and abstract_node.text else ""
-
-                        papers.append(Paper(datestamp=datestamp, title=title, abstract=abstract))
+                        papers.append(Paper(id=id, datestamp=datestamp, title=title, abstract=abstract))
 
                         # clear record from memory
                         elem.clear()
@@ -172,14 +168,14 @@ class Ingestor:
 
         if new_resume_token:
             self.resume_token = new_resume_token
-            self.__upsert_resume_token__(self.resume_token, expiration_date)
+            self._upsert_resume_token(self.resume_token, expiration_date)
         else:
             self.resume_token = None
 
         last_datestamp = papers[-1].datestamp
         if last_datestamp:
-            self.__upsert_datestamp__(papers[-1].datestamp)
+            self._upsert_datestamp(papers[-1].datestamp)
         else:
-            self.__expire_datestamp__()
+            self._expire_datestamp()
 
         return papers
