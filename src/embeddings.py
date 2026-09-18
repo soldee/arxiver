@@ -1,6 +1,8 @@
+from config import cfg
+
+import logging
 import torch
 import gc
-from config import cfg
 from sentence_transformers import SentenceTransformer
 from fetcher import Paper
 
@@ -8,6 +10,7 @@ class EmbeddingsGen:
     def __init__(self, batch_size: int):
         self.model = SentenceTransformer(cfg.EMBEDDING_MODEL_NAME, device=cfg.PYTORCH_DEVICE, local_files_only=True)
         self.batch_size = batch_size
+        self.logger = logging.getLogger(__name__)
 
     def _encode_with_retry(self, texts: list[str], initial_batch_size: int):
         current_batch_size = initial_batch_size
@@ -16,7 +19,7 @@ class EmbeddingsGen:
             oom_triggered = False
             
             try:
-                return self.model.encode(texts, batch_size=current_batch_size)
+                return self.model.encode(texts, batch_size=current_batch_size, normalize_embeddings=True)
             except torch.cuda.OutOfMemoryError:
                 oom_triggered = True
             
@@ -27,10 +30,10 @@ class EmbeddingsGen:
                 
                 if current_batch_size <= 1:
                     raise RuntimeError("OOM even with batch_size=1. An abstract is too long.")
-                    
+                
                 current_batch_size = current_batch_size // 2
-                print(f"\n[Warning] GPU OOM caught. Cleared cache. Retrying with batch_size={current_batch_size}")
-
+                self.logger.warning("GPU OOM caught. Cleared cache. Retrying with batch_size=%d", current_batch_size)
+                
     def generate_embeddings(self, papers: list[Paper]):
         n = len(papers)
 
@@ -40,3 +43,6 @@ class EmbeddingsGen:
             
             emb = self._encode_with_retry(texts, self.batch_size)
             yield (chunk, emb)
+
+    def generate_embedding(self, text: str):
+        return self.model.encode(text, normalize_embeddings=True)

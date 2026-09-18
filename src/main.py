@@ -15,15 +15,22 @@ if __name__ == '__main__':
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 
-    conn = psycopg2.connect(cfg.DB_URL)
-    fetcher = ArxivOaiFetcher(conn)
-    gen = EmbeddingsGen(cfg.MODEL_BATCH_SIZE)
+    logger = logging.getLogger(__name__)
 
-    papers: list[Paper] = fetcher.request_batch()
+    with psycopg2.connect(cfg.DB_URL) as conn:
+        fetcher = ArxivOaiFetcher(conn)
+        gen = EmbeddingsGen(cfg.MODEL_BATCH_SIZE)
+        repo = PaperRepository(conn)
 
-    repo = PaperRepository(conn)
+        count = 0
 
-    for chunk, emb in gen.generate_embeddings(papers):
-        repo.insert_batch_with_embeddings(zip(chunk, emb.tolist()))
+        while count < cfg.TOTAL_INGESTION_PAPER_NUM:
+            papers: list[Paper] = fetcher.request_batch()
 
-    fetcher.update_resumables()
+            for chunk, emb in gen.generate_embeddings(papers):
+                repo.insert_batch_with_embeddings(zip(chunk, emb.tolist()))
+
+            fetcher.update_resumables()
+
+            count += len(papers)
+            logger.info("Total ingested count: %d/%d", count, cfg.TOTAL_INGESTION_PAPER_NUM)

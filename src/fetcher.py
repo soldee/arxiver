@@ -11,6 +11,9 @@ class Paper:
         self.title = title
         self.abstract = abstract
 
+    def __str__(self):
+        return f"id={self.id}, datestamp={self.datestamp}\n{self.title}\n{self.abstract}"
+
 
 class ArxivOaiFetcher:
 
@@ -127,7 +130,7 @@ class ArxivOaiFetcher:
         else:
             params = {
                 'verb':'ListRecords', 
-                'set':'cs:cs:AI', 
+                'set':'cs:cs:RO', 
                 'metadataPrefix':'arXiv'
             }
             if self.last_datestamp is not None:
