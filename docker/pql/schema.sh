@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS $POSTGRES_ARXIV_TABLE (
 );
 
 CREATE INDEX fts_idx ON arxiv_meta USING GIN (fts);
+CREATE INDEX ON arxiv_meta USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS $POSTGRES_RESUMABLES_TABLE (
     id text PRIMARY KEY,
