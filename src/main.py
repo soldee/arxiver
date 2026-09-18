@@ -25,3 +25,5 @@ if __name__ == '__main__':
 
     for chunk, emb in gen.generate_embeddings(papers):
         repo.insert_batch_with_embeddings(zip(chunk, emb.tolist()))
+
+    fetcher.update_resumables()

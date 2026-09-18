@@ -17,7 +17,9 @@ class ArxivOaiFetcher:
     def __init__(self, conn, rate_limit_seconds: float = 4.0):
         self.conn = conn
         self.logger = logging.getLogger(__name__)
+
         self.resume_token: str | None = None
+        self.token_expiration_date: str | None = None
         self.last_datestamp: str | None = None
 
         self._last_request_time: float = 0
@@ -89,6 +91,16 @@ class ArxivOaiFetcher:
             DELETE FROM {cfg.POSTGRES_RESUMABLES_TABLE} WHERE id = 'last_datestamp'
         """)
         cur.close()   
+
+    def update_resumables(self):
+        if self.resume_token:
+            self._upsert_resume_token(self.resume_token, self.token_expiration_date)
+
+        if self.last_datestamp:
+            self._upsert_datestamp(self.last_datestamp)
+        else:
+            self._expire_datestamp()
+
 
     def _enforce_rate_limits(self):
         now = time.monotonic()
@@ -183,16 +195,20 @@ class ArxivOaiFetcher:
             self.logger.error('No papers found')
             return papers
 
+        self.logger.info("Found %d papers", len(papers))
+
+        # resumables have to be persisted after the papers have been persisted properly
+        # this way, if there is an error when processing papers, we can resume from the last persisted token/datestamp
+        # so the responsibility of "commiting" the papers is offloaded to the consumer
         if new_resume_token:
             self.resume_token = new_resume_token
-            self._upsert_resume_token(self.resume_token, expiration_date)
+            self.token_expiration_date = expiration_date
         else:
             self.resume_token = None
+            self.token_expiration_date = None
 
         last_datestamp = papers[-1].datestamp
         if last_datestamp:
-            self._upsert_datestamp(papers[-1].datestamp)
-        else:
-            self._expire_datestamp()
+            self.last_datestamp = last_datestamp
 
         return papers
