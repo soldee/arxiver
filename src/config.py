@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     EMBEDDING_MODEL_NAME: str
     EMBEDDING_MODEL_DIM: int
+    MODEL_BATCH_SIZE: int
 
     ARXIV_OAIMPH_URL: str
 

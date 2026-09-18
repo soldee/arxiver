@@ -1,8 +1,10 @@
 from config import cfg
-from ingestion import (
-    Ingestor,
+from fetcher import (
+    ArxivOaiFetcher,
     Paper
 )
+from embeddings import EmbeddingsGen
+from repository import PaperRepository
 
 import logging
 import psycopg2
@@ -14,11 +16,12 @@ if __name__ == '__main__':
     )
 
     conn = psycopg2.connect(cfg.DB_URL)
+    fetcher = ArxivOaiFetcher(conn)
+    gen = EmbeddingsGen(cfg.MODEL_BATCH_SIZE)
 
-    ingestor = Ingestor(conn)
+    papers: list[Paper] = fetcher.request_batch()
 
-    papers: list[Paper] = ingestor.request_batch()
-    if len(papers) != 0:
-        with open('papers.txt', 'w+') as f:
-            for paper in papers:
-                f.write(f"{paper.datestamp}, {paper.title}, {paper.abstract}\n")
+    repo = PaperRepository(conn)
+
+    for chunk, emb in gen.generate_embeddings(papers):
+        repo.insert_batch_with_embeddings(zip(chunk, emb.tolist()))

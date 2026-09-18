@@ -2,6 +2,7 @@ from config import cfg
 import requests
 from xml.etree import ElementTree as ET
 import logging
+import time
 
 class Paper:
     def __init__(self, id: str, datestamp, title: str, abstract: str):
@@ -13,11 +14,14 @@ class Paper:
 
 class ArxivOaiFetcher:
 
-    def __init__(self, conn):
+    def __init__(self, conn, rate_limit_seconds: float = 4.0):
         self.conn = conn
         self.logger = logging.getLogger(__name__)
         self.resume_token: str | None = None
         self.last_datestamp: str | None = None
+
+        self._last_request_time: float = 0
+        self.rate_limit_seconds = rate_limit_seconds
 
         self._fetch_resume_token()
 
@@ -86,7 +90,20 @@ class ArxivOaiFetcher:
         """)
         cur.close()   
 
+    def _enforce_rate_limits(self):
+        now = time.monotonic()
+        elapsed = now - self._last_request_time
+
+        if elapsed < self.rate_limit_seconds:
+            wait_time = self.rate_limit_seconds - elapsed
+            self.logger.info("Rate limit delay: sleeping for %.2fs", wait_time)
+            time.sleep(wait_time)
+
+        self._last_request_time = time.monotonic()
+
     def request_batch(self) -> list[Paper]:
+        self._enforce_rate_limits()
+
         url: str = cfg.ARXIV_OAIMPH_URL
 
         params = {}
