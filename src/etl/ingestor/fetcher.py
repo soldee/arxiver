@@ -1,4 +1,5 @@
-from config import cfg
+from core.config import cfg
+
 import requests
 from xml.etree import ElementTree as ET
 import logging

@@ -1,14 +1,10 @@
 import argparse
 
 def ingest(set_name: str, quantity: int):
-    from config import cfg
-    from fetcher import (
-        ArxivOaiFetcher,
-        Paper,
-        Resumables
-    )
-    from embeddings import EmbeddingsGen
-    from repository import PaperRepository
+    from src.core.config import cfg
+    from src.etl.ingestor.fetcher import ArxivOaiFetcher, Paper, Resumables
+    from src.etl.ingestor.embeddings import EmbeddingsGen
+    from src.etl.ingestor.repository import PaperRepository
 
     import logging
     import psycopg2

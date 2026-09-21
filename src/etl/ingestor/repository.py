@@ -1,4 +1,5 @@
-from fetcher import Paper
+from src.etl.ingestor.fetcher import Paper
+
 import logging
 
 class PaperRepository:

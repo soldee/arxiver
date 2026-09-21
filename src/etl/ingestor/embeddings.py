@@ -1,10 +1,10 @@
-from config import cfg
+from core.config import cfg
+from src.etl.ingestor.fetcher import Paper
 
 import logging
 import torch
 import gc
 from sentence_transformers import SentenceTransformer
-from fetcher import Paper
 
 class EmbeddingsGen:
     def __init__(self, batch_size: int):
