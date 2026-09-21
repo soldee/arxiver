@@ -4,7 +4,6 @@ from xml.etree import ElementTree as ET
 import logging
 import time
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 class Paper:
     def __init__(self, id: str, datestamp, title: str, abstract: str):
@@ -103,14 +102,14 @@ class Resumables:
 
         return token, datestamp
 
-    def set(self, set_name: str, resume_token: str|None, token_expiration_date:str|None, resume_datestamp: str|None, 
-            datestamp_expire_date: str|None = None):
+    def set(self, set_name: str, resume_token: str|None, token_expire_date:datetime|None, resume_datestamp: str|None, 
+            datestamp_expire_date: datetime|None = None):
         item = self.set_resumables.get(set_name)
 
         if not item or resume_datestamp:
-            new_item = ResumableItem(resume_token, token_expiration_date, resume_datestamp, datestamp_expire_date)
+            new_item = ResumableItem(resume_token, token_expire_date, resume_datestamp, datestamp_expire_date)
         else:
-            new_item = ResumableItem(resume_token, token_expiration_date, item.datestamp, item.datestamp_expire_date)
+            new_item = ResumableItem(resume_token, token_expire_date, item.datestamp, item.datestamp_expire_date)
             
         self.set_resumables[set_name] = new_item
 
@@ -232,6 +231,7 @@ class ArxivOaiFetcher:
         self.logger.info("Found %d papers for set: %s", len(papers), set_name)
 
         last_datestamp = papers[-1].datestamp
-        self._resumables.set(set_name, new_resume_token, expiration_date, last_datestamp)
+
+        self._resumables.set(set_name, new_resume_token, datetime.fromisoformat(expiration_date), last_datestamp)
 
         return papers
