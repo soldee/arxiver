@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-dotenv
+psycopg2
+requests
+
+transformers
+sentence-transformers
