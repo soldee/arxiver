@@ -1,4 +1,4 @@
-from core.config import cfg
+from src.core.config import cfg
 
 import requests
 from xml.etree import ElementTree as ET
@@ -54,7 +54,7 @@ class Resumables:
                 item = ResumableItem(x[1], x[2], x[3], x[4])
                 self.set_resumables[x[0]] = item
 
-        self.logger.info("Fetched %d ListSet resumables for sets: %s", len(self.set_resumables), ''.join(self.set_resumables.keys()))
+        self.logger.info("Fetched %d ListSet resumables for sets: %s", len(self.set_resumables), ', '.join(self.set_resumables.keys()))
 
     def commit(self, set_name: str):
         """
@@ -89,7 +89,7 @@ class Resumables:
         if not item:
             return None, None
 
-        now = datetime.now(cfg.TIMEZONE)
+        now = datetime.now(cfg.etl.TIMEZONE)
         token: str | None = None
         datestamp: str | None = None
 
@@ -141,7 +141,7 @@ class ArxivOaiFetcher:
     def request_batch(self, set_name: str) -> list[Paper]:
         self._enforce_rate_limits()
 
-        url: str = cfg.ARXIV_OAIMPH_URL
+        url: str = cfg.etl.ARXIV_OAIMPH_URL
 
         self.logger.info("Fetching for set '%s'", set_name)
 

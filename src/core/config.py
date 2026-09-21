@@ -1,5 +1,20 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel
 from zoneinfo import ZoneInfo
+
+class APISettings(BaseModel):
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+
+class ETLSettings(BaseModel):
+    ARXIV_OAIMPH_URL: str
+
+    EMBEDDING_MODEL_DIM: int
+    MODEL_BATCH_SIZE: int
+    PYTORCH_DEVICE: str
+
+    LOG_LEVEL: str
+    TIMEZONE: ZoneInfo
 
 class Settings(BaseSettings):
     POSTGRES_USER: str
@@ -12,16 +27,11 @@ class Settings(BaseSettings):
     POSTGRES_RESUMABLES_TABLE: str
 
     EMBEDDING_MODEL_NAME: str
-    EMBEDDING_MODEL_DIM: int
-    MODEL_BATCH_SIZE: int
-    PYTORCH_DEVICE: str
 
-    ARXIV_OAIMPH_URL: str
+    api: APISettings = APISettings()
+    etl: ETLSettings
 
-    LOG_LEVEL: str
-    TIMEZONE: ZoneInfo
-
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
+    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', env_nested_delimiter='__', extra='ignore')
 
     @property
     def DB_URL(self) -> str:

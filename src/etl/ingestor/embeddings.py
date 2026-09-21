@@ -1,4 +1,4 @@
-from core.config import cfg
+from src.core.config import cfg
 from src.etl.ingestor.fetcher import Paper
 
 import logging
@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 
 class EmbeddingsGen:
     def __init__(self, batch_size: int):
-        self.model = SentenceTransformer(cfg.EMBEDDING_MODEL_NAME, device=cfg.PYTORCH_DEVICE, local_files_only=True)
+        self.model = SentenceTransformer(cfg.EMBEDDING_MODEL_NAME, device=cfg.etl.PYTORCH_DEVICE, local_files_only=True)
         self.batch_size = batch_size
         self.logger = logging.getLogger(__name__)
 
