@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from zoneinfo import ZoneInfo
 
 class Settings(BaseSettings):
     POSTGRES_USER: str
@@ -17,9 +18,8 @@ class Settings(BaseSettings):
 
     ARXIV_OAIMPH_URL: str
 
-    TOTAL_INGESTION_PAPER_NUM: int
-
     LOG_LEVEL: str
+    TIMEZONE: ZoneInfo
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 

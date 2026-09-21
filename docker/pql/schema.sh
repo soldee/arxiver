@@ -17,8 +17,10 @@ CREATE INDEX fts_idx ON arxiv_meta USING GIN (fts);
 CREATE INDEX ON arxiv_meta USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS $POSTGRES_RESUMABLES_TABLE (
-    id text PRIMARY KEY,
-    value text NOT NULL,
-    expire_date TIMESTAMPTZ
+    set text PRIMARY KEY,
+    resume_token text,
+    token_expire_date TIMESTAMPTZ,
+    resume_datestamp text,
+    datestamp_expire_date TIMESTAMPTZ
 );
 EOF
