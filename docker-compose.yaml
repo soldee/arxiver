@@ -24,13 +24,34 @@ services:
     ports:
       - 8080:8080
 
+  api:
+    build:
+      context: .
+      dockerfile: ./docker/api.Dockerfile
+      args:
+        EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - db
+    env_file:
+      - .env
+    ports:
+      - 8000:8000
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   ingestor_etl:
     build:
       context: .
       dockerfile: ./docker/ingestor_etl.Dockerfile
       args:
         EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
-    command: python -m src.etl.ingestor.runner cs:cs:RO 2000
+    command: python -m src.etl.ingestor.runner cs:cs:RO 1000
     depends_on:
       - db
     env_file:

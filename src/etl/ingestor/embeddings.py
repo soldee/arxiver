@@ -43,6 +43,3 @@ class EmbeddingsGen:
             
             emb = self._encode_with_retry(texts, self.batch_size)
             yield (chunk, emb)
-
-    def generate_embedding(self, text: str):
-        return self.model.encode(text, normalize_embeddings=True)
