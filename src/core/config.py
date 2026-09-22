@@ -5,6 +5,10 @@ from zoneinfo import ZoneInfo
 class APISettings(BaseModel):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    MIN_DB_CONNECTIONS: int
+    MAX_DB_CONNECTIONS: int
+
+    PYTORCH_DEVICE: str
 
 class ETLSettings(BaseModel):
     ARXIV_OAIMPH_URL: str
@@ -28,7 +32,7 @@ class Settings(BaseSettings):
 
     EMBEDDING_MODEL_NAME: str
 
-    api: APISettings = APISettings()
+    api: APISettings
     etl: ETLSettings
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', env_nested_delimiter='__', extra='ignore')
