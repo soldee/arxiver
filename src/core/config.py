@@ -9,6 +9,9 @@ class APISettings(BaseModel):
     MAX_DB_CONNECTIONS: int
 
     PYTORCH_DEVICE: str
+    ENABLE_EMBEDDING_BATCHING: bool
+    EMBEDDING_MAX_LATENCY_S: float
+    EMBEDDING_MAX_BATCH_SIZE_S: int
 
 class ETLSettings(BaseModel):
     ARXIV_OAIMPH_URL: str
