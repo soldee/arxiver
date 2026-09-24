@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request
 from pydantic import BaseModel
-import psycopg2.pool
+from psycopg_pool import AsyncConnectionPool
 import logging
-import asyncio
 
 from src.api.retrieval import EmbeddingGen, SimpleEmbeddingGen, BatchedEmbeddingGen, Retriever
 from src.core.config import cfg
@@ -19,11 +18,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing PostgreSQL Connection Pool.")
-    app.state.db_pool = psycopg2.pool.ThreadedConnectionPool(
-        minconn=cfg.api.MIN_DB_CONNECTIONS,
-        maxconn=cfg.api.MAX_DB_CONNECTIONS,
-        dsn=cfg.DB_URL
+    app.state.db_pool = AsyncConnectionPool(
+        conninfo=cfg.DB_URL,
+        min_size=cfg.api.MIN_DB_CONNECTIONS,
+        max_size=cfg.api.MAX_DB_CONNECTIONS,
+        open=False
     )
+    await app.state.db_pool.open()
 
     logger.info("Initializing Retriever for inference.")
     retriever = Retriever()
@@ -40,19 +41,17 @@ async def lifespan(app: FastAPI):
     app.state.embedding_gen = embedding_gen
 
     yield
-    app.state.db_pool.closeall()
+
+    await app.state.db_pool.close()
     if cfg.api.ENABLE_EMBEDDING_BATCHING and embedding_gen:
         await embedding_gen.stop_worker()
 
 
 app = FastAPI(lifespan=lifespan)
 
-def get_db(request: Request):
-    conn = request.app.state.db_pool.getconn()
-    try:
+async def get_db(request: Request):
+    async with request.app.state.db_pool.connection() as conn:
         yield conn
-    finally:
-        request.app.state.db_pool.putconn(conn)
 
 def get_retriever(request: Request):
     return request.app.state.retriever
@@ -69,5 +68,5 @@ async def search_paper(query: NLQuery, conn=Depends(get_db),
                  retriever:Retriever=Depends(get_retriever)
                  ):
     embedding = await embedding_gen.embed(query.query)
-    papers = retriever.retrieve_and_rank(conn=conn, embedding=embedding)
+    papers = await retriever.retrieve_and_rank(conn=conn, embedding=embedding)
     return {"papers": papers}

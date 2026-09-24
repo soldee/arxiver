@@ -133,8 +133,12 @@ packaging==26.3
     # via
     #   huggingface-hub
     #   transformers
-psycopg2==2.9.13
+psycopg[binary,pool]==3.3.6
     # via -r requirements.in
+psycopg-binary==3.3.6
+    # via psycopg
+psycopg-pool==3.3.3
+    # via psycopg
 pydantic==2.13.5
     # via
     #   fastapi
@@ -203,6 +207,8 @@ typing-extensions==4.16.0
     #   anyio
     #   fastapi
     #   huggingface-hub
+    #   psycopg
+    #   psycopg-pool
     #   pydantic
     #   pydantic-core
     #   sentence-transformers

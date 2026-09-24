@@ -77,6 +77,8 @@ class BatchedEmbeddingGen(EmbeddingGen):
                 finally:
                     for _ in range(len(futures)):
                         self.queue.task_done()
+                    texts.clear()
+                    futures.clear()
 
     async def embed(self, text: str) -> List[float]:
         fut = asyncio.get_running_loop().create_future()
@@ -88,22 +90,23 @@ class Retriever:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def retrieve_and_rank(self, conn, embedding: list[float]) -> list[Paper]:
+    async def retrieve_and_rank(self, conn, embedding: list[float]) -> list[Paper]:
         if not embedding or len(embedding) == 0:
             self.logger.error("Received empty embeddings")
             return []
 
         embeddings_str = json.dumps(embedding)
 
-        with conn.cursor() as cur:
-            cur.execute(
+        async with conn.cursor() as cur:
+            await cur.execute(
                 f"""
                     SELECT id, datestamp, title, abstract
                     FROM {cfg.POSTGRES_ARXIV_TABLE}
                     ORDER BY embedding <=> %s::vector LIMIT 20
                 """, (embeddings_str,)
             )
-            conn.commit()
-            papers: list[Paper] = [Paper(x[0], x[1], x[2], x[3]) for x in cur.fetchall()]
+            await conn.commit()
+            papers: list[Paper] = [Paper(x[0], x[1], x[2], x[3]) for x in await cur.fetchall()]
 
         return papers
+

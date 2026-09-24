@@ -7,7 +7,7 @@ def ingest(set_name: str, quantity: int):
     from src.etl.ingestor.repository import PaperRepository
 
     import logging
-    import psycopg2
+    import psycopg
 
     logging.basicConfig(
         level=cfg.etl.LOG_LEVEL,
@@ -16,7 +16,7 @@ def ingest(set_name: str, quantity: int):
 
     logger = logging.getLogger(__name__)
 
-    with psycopg2.connect(cfg.DB_URL) as conn:
+    with psycopg.connect(cfg.DB_URL) as conn:
         resumables = Resumables(conn)
         fetcher = ArxivOaiFetcher(conn, resumables)
         gen = EmbeddingsGen(cfg.etl.MODEL_BATCH_SIZE)
