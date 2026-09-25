@@ -68,5 +68,7 @@ async def search_paper(query: NLQuery, conn=Depends(get_db),
                  retriever:Retriever=Depends(get_retriever)
                  ):
     embedding = await embedding_gen.embed(query.query)
-    papers = await retriever.retrieve_and_rank(conn=conn, embedding=embedding)
+    dense_search_papers = await retriever.dense_search(conn=conn, embedding=embedding)
+    sparse_search_papers = await retriever.sparse_search(conn=conn, query=query.query)
+    papers = retriever.rank(dense_search_papers, sparse_search_papers)
     return {"papers": papers}

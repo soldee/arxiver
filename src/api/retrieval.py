@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Dict
 
 from src.core.config import cfg
 from src.etl.ingestor.fetcher import Paper
@@ -21,7 +21,7 @@ class EmbeddingGen(ABC):
 
 class SimpleEmbeddingGen(EmbeddingGen):
     async def embed(self, text: str) -> List[float]:
-        embeddings = await asyncio.to_thread(self.model.encode, text, normalize_embeddings=True)
+        embeddings = await asyncio.to_thread(self.model.encode_query, text, normalize_embeddings=True)
         return embeddings.tolist()
 
 class BatchedEmbeddingGen(EmbeddingGen):
@@ -86,11 +86,21 @@ class BatchedEmbeddingGen(EmbeddingGen):
         return await fut    
 
 
+class RankedPaper:
+    def __init__(self, paper: Paper, score: float, rankers: dict[str, int]):
+        self.id = paper.id
+        self.datestamp = paper.datestamp
+        self.title = paper.title
+        self.abstract = paper.abstract
+        self.score = score
+        self.rankers = rankers
+
+
 class Retriever:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    async def retrieve_and_rank(self, conn, embedding: list[float]) -> list[Paper]:
+    async def dense_search(self, conn, embedding: list[float]) -> list[Paper]:
         if not embedding or len(embedding) == 0:
             self.logger.error("Received empty embeddings")
             return []
@@ -106,7 +116,58 @@ class Retriever:
                 """, (embeddings_str,)
             )
             await conn.commit()
-            papers: list[Paper] = [Paper(x[0], x[1], x[2], x[3]) for x in await cur.fetchall()]
+            results = await cur.fetchall()
+            papers: list[Paper] = [Paper(x[0], x[1], x[2], x[3]) for x in results]
 
         return papers
+
+    async def sparse_search(self, conn, query: str):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                f"""
+                    SELECT id, datestamp, title, abstract, ts_rank_cd(fts, websearch_to_tsquery(%s)) AS rank
+                    FROM {cfg.POSTGRES_ARXIV_TABLE}
+                    WHERE fts @@ websearch_to_tsquery(%s)
+                    ORDER BY rank DESC
+                    LIMIT 50;
+                """, (query, query,)
+            )
+            await conn.commit()
+            results = await cur.fetchall()
+            papers: list[Paper] = [Paper(x[0], x[1], x[2], x[3]) for x in results]
+
+        return papers
+
+    def rank(self, dense_search_papers: List[Paper], sparse_search_papers: List[Paper], rrf_k: int = 60, top_k: int = 20) -> List[RankedPaper]:
+        rrf_scores: Dict[str, float] = {}
+        papers_by_id: Dict[str, Paper] = {}
+
+        dense_ranks: Dict[str, int] = {}
+        sparse_ranks: Dict[str, int] = {}
+
+        for rank_idx, paper in enumerate(dense_search_papers, start=1):
+            dense_ranks[paper.id] = rank_idx
+            rrf_scores[paper.id] = rrf_scores.get(paper.id, 0.0) + 1.0 / (rrf_k + rank_idx)
+            papers_by_id[paper.id] = paper
+
+        for rank_idx, paper in enumerate(sparse_search_papers, start=1):
+            sparse_ranks[paper.id] = rank_idx
+            rrf_scores[paper.id] = rrf_scores.get(paper.id, 0.0) + 1.0 / (rrf_k + rank_idx)
+            papers_by_id[paper.id] = paper
+
+        ranked_papers = [
+            RankedPaper(
+                paper=papers_by_id[pid], 
+                score=score, 
+                rankers={
+                    "dense": dense_ranks.get(pid), 
+                    "sparse": sparse_ranks.get(pid)
+                }
+            )
+            for pid, score in rrf_scores.items()
+        ]
+
+        ranked_papers.sort(key=lambda x: x.score, reverse=True)
+
+        return ranked_papers[:top_k]
 
