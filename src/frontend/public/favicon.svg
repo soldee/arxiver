@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Clean, solid background suitable for a favicon -->
+  <rect width="512" height="512" rx="120" fill="#ffffff" />
+  
+  <!-- Centered Logo Text -->
+  <text x="256" y="295" text-anchor="middle">
+    <!-- The classic arXiv text in Cornell Red -->
+    <tspan font-family="'Times New Roman', Times, serif" font-size="120" fill="#B31B1B">arXiv</tspan>
+    <!-- The appended ER in Postgres Blue -->
+    <tspan font-family="'Times New Roman', Times, serif" font-size="120" font-weight="bold" fill="#336791">ER</tspan>
+  </text>
+</svg>
