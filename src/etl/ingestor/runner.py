@@ -25,14 +25,14 @@ def ingest(set_name: str, quantity: int):
         count = 0
 
         while count < quantity:
-            papers: list[Paper] = fetcher.request_batch(set_name)
+            papers, is_end = fetcher.request_batch(set_name)
+
+            if is_end:
+                logger.info("Hit end of OAI PMH stream for set '%s'. No more batches will be requested.", set_name)
 
             if len(papers) == 0:
-                if count > 0:
-                    logger.info("No more paper's returned by arXiv, might have hit end of stream. Commiting last resumables.")
-                    resumables.commit(set_name)
-                else:
-                    logger.error("No papers found for ListSet: %s", set_name)
+                logger.info("No more paper's returned by arXiv. Commiting last resumables.")
+                resumables.commit(set_name)
                 return
 
             for chunk, emb in gen.generate_embeddings(papers):
@@ -42,6 +42,9 @@ def ingest(set_name: str, quantity: int):
 
             count += len(papers)
             logger.info("Total ingested count: %d/%d", count, quantity)
+
+            if is_end:
+                return
 
 
 if __name__ == '__main__':

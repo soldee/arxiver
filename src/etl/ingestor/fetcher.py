@@ -93,8 +93,6 @@ class Resumables:
         token: str | None = None
         datestamp: str | None = None
 
-        print(f"resume_token={item.resume_token}, token_expire_date={item.token_expire_date}, now={now}")
-
         if item.resume_token and item.token_expire_date and item.token_expire_date > now:
             token = item.resume_token
 
@@ -138,7 +136,7 @@ class ArxivOaiFetcher:
 
         self._last_request_time = time.monotonic()
 
-    def request_batch(self, set_name: str) -> list[Paper]:
+    def request_batch(self, set_name: str) -> tuple[list[Paper], bool]:
         self._enforce_rate_limits()
 
         url: str = cfg.etl.ARXIV_OAIMPH_URL
@@ -147,6 +145,8 @@ class ArxivOaiFetcher:
 
         params = {}
         resumable_token, resumable_datestamp = self._resumables.get(set_name)
+        self.logger.info("resumeDatesamp: %s, resumeToken: %s", resumable_datestamp, resumable_token)
+
         if resumable_token is not None:
             params = {
                 'verb': 'ListRecords',
@@ -221,18 +221,23 @@ class ArxivOaiFetcher:
                     elif event == 'end' and elem.tag == f"{{{namespaces['oai']}}}resumptionToken":
                         new_resume_token = elem.text
                         expiration_date = elem.get("expirationDate")
+                        expiration_date = datetime.fromisoformat(expiration_date) if expiration_date is not None else None
                         elem.clear()
 
         parser.close()
 
+        is_end = False
+        if new_resume_token is None:
+            is_end = True
+
         if len(papers) == 0:
             self.logger.error('No papers found')
-            return papers
+            return ([], is_end)
 
         self.logger.info("Found %d papers for set: %s", len(papers), set_name)
 
         last_datestamp = papers[-1].datestamp
 
-        self._resumables.set(set_name, new_resume_token, datetime.fromisoformat(expiration_date), last_datestamp)
+        self._resumables.set(set_name, new_resume_token, expiration_date, last_datestamp)
 
-        return papers
+        return (papers, is_end)
