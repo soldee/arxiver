@@ -23,6 +23,18 @@ function RankBadge({ label, rank }) {
   );
 }
 
+function ScoreBadge({ label, score }) {
+  if (score === undefined || score === null) return null;
+  return (
+    <span className="inline-flex items-baseline gap-1 text-[13px] text-stone-500">
+      <span>{label}</span>
+      <span className="font-medium text-amber-800 tabular-nums">
+        {(score * 100).toFixed(2)}%
+      </span>
+    </span>
+  );
+}
+
 function PaperEntry({ paper, expanded, onToggleExpand }) {
   const abstract = paper.abstract || "";
   const isLong = abstract.length > 260;
@@ -53,6 +65,7 @@ function PaperEntry({ paper, expanded, onToggleExpand }) {
           </span>
           <RankBadge label="dense" rank={paper.rankers?.dense} />
           <RankBadge label="sparse" rank={paper.rankers?.sparse} />
+          <ScoreBadge label="re-ranker" score={paper.scores?.reranker} />
         </div>
 
         <p className="mt-1.5 text-[15px] leading-relaxed text-stone-700">
@@ -121,7 +134,7 @@ export default function PaperSearch({ apiBaseUrl = "http://localhost:8000/api" }
 
         const data = await res.json();
         const results = Array.isArray(data.papers) ? data.papers : [];
-        results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        results.sort((a, b) => (b.scores?.reranker ?? 0) - (a.scores?.reranker ?? 0));  
 
         setPapers(results);
         setExpandedIds(new Set());

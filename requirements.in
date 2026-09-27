@@ -5,6 +5,7 @@ python-dotenv
 psycopg[binary]
 psycopg[pool]
 requests
+pyinstrument
 
 transformers
 sentence-transformers

@@ -15,6 +15,11 @@ class APISettings(BaseModel):
 
     RESULTS_LIMIT: int
 
+    RERANKER_MODEL_NAME: str
+    RERANKER_MODEL_MAX_LEN: int
+
+    PROFILER: bool
+
 class ETLSettings(BaseModel):
     ARXIV_OAIMPH_URL: str
 

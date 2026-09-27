@@ -3,8 +3,9 @@ from fastapi import FastAPI, Depends, Request
 from pydantic import BaseModel
 from psycopg_pool import AsyncConnectionPool
 import logging
+from pyinstrument import Profiler
 
-from src.api.retrieval import EmbeddingGen, SimpleEmbeddingGen, BatchedEmbeddingGen, Retriever
+from src.api.retrieval import EmbeddingGen, SimpleEmbeddingGen, BatchedEmbeddingGen, Retriever, Reranker
 from src.core.config import cfg
 
 
@@ -34,10 +35,18 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Initializing SimpleEmbeddingGen")
         embedding_gen = SimpleEmbeddingGen(cfg.EMBEDDING_MODEL_NAME, cfg.api.PYTORCH_DEVICE)
-    app.state.embedding_gen = embedding_gen
+
+    reranker = Reranker(
+        model_name=cfg.api.RERANKER_MODEL_NAME, 
+        model_device=cfg.api.PYTORCH_DEVICE,
+        model_max_len=cfg.api.RERANKER_MODEL_MAX_LEN
+    )
 
     logger.info("Initializing Retriever for inference.")
-    retriever = Retriever(embedding_gen)
+    retriever = Retriever(
+        embedding_gen=embedding_gen, 
+        reranker=reranker
+    )
     app.state.retriever = retriever
 
     yield
@@ -49,15 +58,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+if cfg.api.PROFILER:
+    @app.middleware("http")
+    async def profile_request(request: Request, call_next):
+        profiler = Profiler()
+        profiler.start()        
+        response = await call_next(request)
+        profiler.stop()
+        
+        print(profiler.output_text(unicode=True, color=True))
+        return response
+
 async def get_db(request: Request):
     async with request.app.state.db_pool.connection() as conn:
         yield conn
 
 def get_retriever(request: Request):
     return request.app.state.retriever
-
-def get_embedding_gen(request: Request):
-    return request.app.state.embedding_gen
 
 class NLQuery(BaseModel):
     query: str

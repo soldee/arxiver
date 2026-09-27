@@ -1,6 +1,6 @@
 import logging
 import json
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import asyncio
 import time
 from abc import ABC, abstractmethod
@@ -87,19 +87,37 @@ class BatchedEmbeddingGen(EmbeddingGen):
 
 
 class RankedPaper:
-    def __init__(self, paper: Paper, score: float, rankers: dict[str, int]):
+    def __init__(self, paper: Paper, scores: dict[str, float], rankers: dict[str, int]):
         self.id = paper.id
         self.datestamp = paper.datestamp
         self.title = paper.title
         self.abstract = paper.abstract
-        self.score = score
+        self.scores = scores
         self.rankers = rankers
 
 
+class Reranker:
+    def __init__(self, model_name: str, model_device: str, model_max_len: int):
+        self.model = CrossEncoder(model_name, device=model_device, local_files_only=True, max_length=model_max_len)
+
+    async def rank(self, query: str, papers: list[RankedPaper], top_k: int):
+        docs = [f"Title: {x.title}. Abstract: {x.abstract}" for x in papers]
+        result = await asyncio.to_thread(self.model.rank, query, docs, top_k=top_k)
+
+        ranked_papers: list[RankedPaper] = []
+        for res in result:
+            paper: RankedPaper = papers[res["corpus_id"]]
+            paper.scores['reranker'] = res["score"]
+            ranked_papers.append(paper)
+
+        return ranked_papers
+
+
 class Retriever:
-    def __init__(self, embedding_gen: EmbeddingGen):
+    def __init__(self, embedding_gen: EmbeddingGen, reranker: Reranker):
         self.logger = logging.getLogger(__name__)
         self.embedding_gen = embedding_gen
+        self.reranker = reranker
 
     async def dense_search(self, conn, embedding: list[float], limit: int) -> list[Paper]:
         if not embedding or len(embedding) == 0:
@@ -159,7 +177,9 @@ class Retriever:
         ranked_papers = [
             RankedPaper(
                 paper=papers_by_id[pid], 
-                score=score, 
+                scores={
+                    "rrf": score
+                }, 
                 rankers={
                     "dense": dense_ranks.get(pid), 
                     "sparse": sparse_ranks.get(pid)
@@ -168,7 +188,7 @@ class Retriever:
             for pid, score in rrf_scores.items()
         ]
 
-        ranked_papers.sort(key=lambda x: x.score, reverse=True)
+        ranked_papers.sort(key=lambda x: x.scores['rrf'], reverse=True)
 
         return ranked_papers[:top_k]
 
@@ -187,5 +207,7 @@ class Retriever:
             sparse_search_papers=sparse_search_papers,
             top_k=rrf_limit
         )
-        return rrf_papers[:limit]
+        reranker_papers = await self.reranker.rank(query=query, papers=rrf_papers, top_k=limit)
+
+        return reranker_papers
 
