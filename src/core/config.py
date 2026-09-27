@@ -13,6 +13,8 @@ class APISettings(BaseModel):
     EMBEDDING_MAX_LATENCY_S: float
     EMBEDDING_MAX_BATCH_SIZE_S: int
 
+    RESULTS_LIMIT: int
+
 class ETLSettings(BaseModel):
     ARXIV_OAIMPH_URL: str
 

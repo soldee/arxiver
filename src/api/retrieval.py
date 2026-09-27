@@ -97,10 +97,11 @@ class RankedPaper:
 
 
 class Retriever:
-    def __init__(self):
+    def __init__(self, embedding_gen: EmbeddingGen):
         self.logger = logging.getLogger(__name__)
+        self.embedding_gen = embedding_gen
 
-    async def dense_search(self, conn, embedding: list[float]) -> list[Paper]:
+    async def dense_search(self, conn, embedding: list[float], limit: int) -> list[Paper]:
         if not embedding or len(embedding) == 0:
             self.logger.error("Received empty embeddings")
             return []
@@ -112,8 +113,8 @@ class Retriever:
                 f"""
                     SELECT id, datestamp, title, abstract
                     FROM {cfg.POSTGRES_ARXIV_TABLE}
-                    ORDER BY embedding <=> %s::vector LIMIT 20
-                """, (embeddings_str,)
+                    ORDER BY embedding <=> %s::vector LIMIT %s
+                """, (embeddings_str, limit)
             )
             await conn.commit()
             results = await cur.fetchall()
@@ -121,7 +122,7 @@ class Retriever:
 
         return papers
 
-    async def sparse_search(self, conn, query: str):
+    async def sparse_search(self, conn, query: str, limit: int):
         async with conn.cursor() as cur:
             await cur.execute(
                 f"""
@@ -129,8 +130,8 @@ class Retriever:
                     FROM {cfg.POSTGRES_ARXIV_TABLE}
                     WHERE fts @@ websearch_to_tsquery(%s)
                     ORDER BY rank DESC
-                    LIMIT 50;
-                """, (query, query,)
+                    LIMIT %s;
+                """, (query, query, limit)
             )
             await conn.commit()
             results = await cur.fetchall()
@@ -138,7 +139,7 @@ class Retriever:
 
         return papers
 
-    def rank(self, dense_search_papers: List[Paper], sparse_search_papers: List[Paper], rrf_k: int = 60, top_k: int = 20) -> List[RankedPaper]:
+    def rank_rrf(self, dense_search_papers: List[Paper], sparse_search_papers: List[Paper], rrf_k: int = 60, top_k: int = 20) -> List[RankedPaper]:
         rrf_scores: Dict[str, float] = {}
         papers_by_id: Dict[str, Paper] = {}
 
@@ -170,4 +171,21 @@ class Retriever:
         ranked_papers.sort(key=lambda x: x.score, reverse=True)
 
         return ranked_papers[:top_k]
+
+    async def search(self, conn, query: str, limit: int) -> List[RankedPaper]:
+        embedding = await self.embedding_gen.embed(query)
+
+        search_limit = limit*3
+        rrf_limit = limit*2
+
+        dense_search_papers, sparse_search_papers = await asyncio.gather(
+            self.dense_search(conn=conn, embedding=embedding, limit=search_limit),
+            self.sparse_search(conn=conn, query=query, limit=search_limit)
+        )
+        rrf_papers = self.rank_rrf(
+            dense_search_papers=dense_search_papers, 
+            sparse_search_papers=sparse_search_papers,
+            top_k=rrf_limit
+        )
+        return rrf_papers[:limit]
 

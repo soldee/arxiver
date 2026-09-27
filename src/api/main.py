@@ -26,10 +26,6 @@ async def lifespan(app: FastAPI):
     )
     await app.state.db_pool.open()
 
-    logger.info("Initializing Retriever for inference.")
-    retriever = Retriever()
-    app.state.retriever = retriever
-
     embedding_gen: EmbeddingGen
     if cfg.api.ENABLE_EMBEDDING_BATCHING:
         logger.info("Initializing BatchedEmbeddingGen")
@@ -39,6 +35,10 @@ async def lifespan(app: FastAPI):
         logger.info("Initializing SimpleEmbeddingGen")
         embedding_gen = SimpleEmbeddingGen(cfg.EMBEDDING_MODEL_NAME, cfg.api.PYTORCH_DEVICE)
     app.state.embedding_gen = embedding_gen
+
+    logger.info("Initializing Retriever for inference.")
+    retriever = Retriever(embedding_gen)
+    app.state.retriever = retriever
 
     yield
 
@@ -63,12 +63,6 @@ class NLQuery(BaseModel):
     query: str
 
 @app.post("/search")
-async def search_paper(query: NLQuery, conn=Depends(get_db), 
-                 embedding_gen:EmbeddingGen=Depends(get_embedding_gen), 
-                 retriever:Retriever=Depends(get_retriever)
-                 ):
-    embedding = await embedding_gen.embed(query.query)
-    dense_search_papers = await retriever.dense_search(conn=conn, embedding=embedding)
-    sparse_search_papers = await retriever.sparse_search(conn=conn, query=query.query)
-    papers = retriever.rank(dense_search_papers, sparse_search_papers)
+async def search_paper(query: NLQuery, conn=Depends(get_db), retriever:Retriever=Depends(get_retriever)):
+    papers = await retriever.search(conn, query.query, cfg.api.RESULTS_LIMIT)
     return {"papers": papers}
