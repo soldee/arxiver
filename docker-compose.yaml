@@ -43,6 +43,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    healthcheck:
+      test: curl http://localhost:8000/health
+      interval: 2s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend_nginx:
     build:

@@ -76,6 +76,11 @@ async def get_db(request: Request):
 def get_retriever(request: Request):
     return request.app.state.retriever
 
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
 class NLQuery(BaseModel):
     query: str
 
