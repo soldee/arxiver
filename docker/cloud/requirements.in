@@ -1,0 +1,6 @@
+pydantic-settings
+python-dotenv
+psycopg[binary]
+psycopg[pool]
+requests
+boto3

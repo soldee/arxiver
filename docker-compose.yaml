@@ -9,6 +9,7 @@ services:
       - pgdata:/var/lib/postgresql/
     env_file:
       - .env
+    profiles: ["standard", "cloud"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "postgres"]
       interval: 10s
@@ -17,12 +18,17 @@ services:
       start_period: 60s
     ports:
       - 5432:5432
+    networks:
+      - arxiver
 
   adminer:
     image: adminer
     restart: always
+    profiles: ["standard"]
     ports:
       - 8081:8080
+    networks:
+      - arxiver
 
   api:
     build:
@@ -43,12 +49,15 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    profiles: ["standard"]
     healthcheck:
       test: curl http://localhost:8000/health
       interval: 2s
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - arxiver
 
   frontend_nginx:
     build:
@@ -58,6 +67,9 @@ services:
       - 8080:80
     depends_on:
       - api
+    profiles: ["standard"]
+    networks:
+      - arxiver
 
   ingestor_etl:
     build:
@@ -78,6 +90,57 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    networks:
+      - arxiver
+
+  localstack:
+    container_name: "localstack"
+    image: localstack/localstack:2026.08.4
+    ports:
+      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559"  # external services port range
+    env_file:
+      - .env
+    environment:
+      # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
+     - DEBUG=0
+     - S3_STRICT_MODE=1
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./docker/cloud/aws-init.sh:/etc/localstack/init/ready.d/init-aws.sh
+    profiles: ["cloud"]
+    networks:
+      - arxiver
+
+  harvester:
+    build:
+      context: .
+      dockerfile: ./docker/cloud/harvester.Dockerfile
+    container_name: harvester
+    env_file:
+      - .env
+    environment:
+      - AWS_DEFAULT_REGION=${CLOUD__AWS_REGION}
+    depends_on:
+      localstack:
+        condition: service_started
+      db:
+        condition: service_healthy
+    profiles: ["cloud"]
+    networks:
+      - arxiver
+
+  terraform:
+    build: ./docker/cloud/terraform
+    profiles: ["cloud"]
+    networks:
+      - arxiver
+
+networks:
+  arxiver:
+    driver: bridge
 
 volumes:
   pgdata:
+  localstack-data:

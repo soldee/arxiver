@@ -136,7 +136,13 @@ class ArxivOaiFetcher:
 
         self._last_request_time = time.monotonic()
 
-    def request_batch(self, set_name: str) -> tuple[list[Paper], bool]:
+
+    def request_batch_parse(self, set_name: str) -> tuple[list[Paper, bool]]:
+        res: requests.Response = self.request_batch(set_name)
+        return self._parse_stream(res, set_name)
+
+
+    def request_batch(self, set_name: str) -> requests.Response:
         self._enforce_rate_limits()
 
         url: str = cfg.etl.ARXIV_OAIMPH_URL
@@ -170,7 +176,7 @@ class ArxivOaiFetcher:
                 self._enforce_rate_limits(extra_delay=retry_after)
 
             res.raise_for_status()
-            return self._parse_stream(res, set_name)
+            return res
         except requests.exceptions.Timeout as err:
             self.logger.error("Request timed out: %s", str(err))
         except requests.exceptions.HTTPError as err:

@@ -25,7 +25,7 @@ def ingest(set_name: str, quantity: int):
         count = 0
 
         while count < quantity:
-            papers, is_end = fetcher.request_batch(set_name)
+            papers, is_end = fetcher.request_batch_parse(set_name)
 
             if is_end:
                 logger.info("Hit end of OAI PMH stream for set '%s'. No more batches will be requested.", set_name)

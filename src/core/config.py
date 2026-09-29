@@ -30,6 +30,11 @@ class ETLSettings(BaseModel):
     LOG_LEVEL: str
     TIMEZONE: ZoneInfo
 
+class CLOUDSettings(BaseModel):
+    LOG_LEVEL: str
+    AWS_REGION: str
+    S3_BUCKET_NAME: str
+
 class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
@@ -44,6 +49,7 @@ class Settings(BaseSettings):
 
     api: APISettings
     etl: ETLSettings
+    cloud: CLOUDSettings
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', env_nested_delimiter='__', extra='ignore')
 
