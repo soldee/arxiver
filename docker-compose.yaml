@@ -9,7 +9,7 @@ services:
       - pgdata:/var/lib/postgresql/
     env_file:
       - .env
-    profiles: ["standard", "cloud"]
+    profiles: ["standard", "cloud", "etl"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "postgres"]
       interval: 10s
@@ -24,7 +24,7 @@ services:
   adminer:
     image: adminer
     restart: always
-    profiles: ["standard"]
+    profiles: ["standard", "cloud", "etl"]
     ports:
       - 8081:8080
     networks:
@@ -109,34 +109,52 @@ services:
       - "${LOCALSTACK_VOLUME_DIR}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ./docker/cloud/aws-init.sh:/etc/localstack/init/ready.d/init-aws.sh
-    profiles: ["cloud"]
+    profiles: ["cloud", "etl"]
     networks:
       - arxiver
 
   harvester:
     build:
       context: .
-      dockerfile: ./docker/cloud/harvester.Dockerfile
+      dockerfile: ./docker/cloud/harvester/harvester.Dockerfile
     container_name: harvester
+    command: python -m src.cloud.harvester cs:cs:RO
     env_file:
       - .env
-    environment:
-      - AWS_DEFAULT_REGION=${CLOUD__AWS_REGION}
     depends_on:
       localstack:
         condition: service_started
       db:
         condition: service_healthy
-    profiles: ["cloud"]
+    profiles: ["etl"]
     networks:
       - arxiver
 
-  terraform:
-    build: ./docker/cloud/terraform
-    profiles: ["cloud"]
+  cloud_ingestor:
+    build:
+      context: .
+      dockerfile: ./docker/cloud/ingestor/ingestor.Dockerfile
+      args:
+        EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
+    container_name: cloud_ingestor
+    env_file:
+      - .env
+    depends_on:
+      localstack:
+        condition: service_started
+      db:
+        condition: service_healthy
+    profiles: ["etl"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - arxiver
-
+  
 networks:
   arxiver:
     driver: bridge

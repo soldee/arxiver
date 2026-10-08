@@ -1,57 +1,31 @@
 from src.core.config import cfg
+from src.cloud.s3repo import S3Repo
+from src.cloud.oai import OAIXMLParser
 
-import boto3
+import argparse
 import psycopg
 import logging
 import requests
 import datetime
 import io
 import time
-from typing import BinaryIO
 from xml.etree import ElementTree as ET
 
+class PaperHarvestingPipeline:
 
-class Harvester:
-
-    def __init__(self, conn, rate_limit_seconds: float = 4.):
+    def __init__(self, conn, oai_parser: OAIXMLParser, s3_repo: S3Repo, rate_limit_seconds: float = 4.):
         self.logger = logging.getLogger(__name__)
         
-        self.bucket_name: str = cfg.cloud.S3_BUCKET_NAME
-        region_name: str = cfg.cloud.AWS_REGION
-        self.s3_client = boto3.client('s3', region_name=region_name)
-        
         self.conn = conn
+        self.oai_parser = oai_parser
+        self.s3_repo = s3_repo
 
         self._last_request_time: float = 0.
         self.rate_limit_seconds: float = rate_limit_seconds
 
-
-    def stream_to_s3(self, file: BinaryIO, set_name: str):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        key = f"raw/{now.year}/{now.month}/{now.day}/{now.timestamp():.6f}.xml"
-
-        self.s3_client.upload_fileobj(
-            Fileobj=file,
-            Bucket=self.bucket_name,
-            Key=key,
-            ExtraArgs={'Metadata': {'set_name': set_name}}
-        )
-
-    def save_error_s3(self, xml_bytes: bytes, reason: str):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        key = f"error/{now.timestamp():.6f}.xml"
-        safe_reason = reason.encode("ascii", "replace").decode("ascii")[:256]
-
-        self.s3_client.put_object(
-            Bucket=self.bucket_name,
-            Key=key,
-            Body=xml_bytes,
-            Metadata={"reason": safe_reason}
-        )
-
     def _save_error_safely(self, xml_bytes: bytes, reason: str):
         try:
-            self.save_error_s3(xml_bytes, reason)
+            self.s3_repo.save_oaixml_error_s3(xml_bytes, reason)
         except Exception:
             self.logger.exception("Failed to save the XML response to the S3 error path")
 
@@ -114,44 +88,6 @@ class Harvester:
         res.raise_for_status()
         return res
 
-
-    def _parse_resumables_xml(
-        self, xml_bytes: bytes
-    ) -> tuple[str | None, datetime.datetime | None, str | None, str | None]:
-        namespaces = {
-            'arxiv': 'http://arxiv.org/OAI/arXiv/',
-            'oai':'http://www.openarchives.org/OAI/2.0/'
-        }
-
-        new_resume_token = None
-        expiration_date = None
-        last_datestamp = None
-
-        parser = ET.fromstring(xml_bytes)
-
-        error_elem = parser.find("./oai:error", namespaces=namespaces)
-        if error_elem is not None:
-            code = error_elem.get("code", "unknown")
-            raise ValueError(f"OAI-PMH error {code}: {error_elem.text or ''}")
-
-        resumeToken_elem = parser.find(".//oai:resumptionToken", namespaces=namespaces)
-        
-        if resumeToken_elem is not None:
-            new_resume_token = resumeToken_elem.text or None
-            expiration_date = resumeToken_elem.get("expirationDate")
-            expiration_date = (
-                datetime.datetime.fromisoformat(expiration_date)
-                if expiration_date is not None else None
-            )
-        
-        headers = parser.findall(
-            "./oai:ListRecords/oai:record/oai:header", namespaces=namespaces
-        )
-        if headers:
-            last_datestamp = headers[-1].findtext("oai:datestamp", namespaces=namespaces)
-        
-        return new_resume_token, expiration_date, last_datestamp, None
-
     def _fetch_resumables(self, set_name: str):
         with self.conn.cursor() as cur:
             cur.execute(f"""
@@ -211,7 +147,7 @@ class Harvester:
 
         self.logger.info("Received response, parsing XML to extract resumables")
         try:
-            new_resume_token, new_token_expire_date, last_datestamp, error = self._parse_resumables_xml(res_bytes)
+            new_resume_token, new_token_expire_date, last_datestamp, error = self.oai_parser.parse_xml_resumables(res_bytes)
         except (ET.ParseError, ValueError):
             reason = "Error parsing OAI-PMH XML response"
             self.logger.exception(reason)
@@ -227,7 +163,7 @@ class Harvester:
                     
         self.logger.info("Streaming XML to S3")
         try:
-            self.stream_to_s3(io.BytesIO(res_bytes), set_name=set_name)
+            self.s3_repo.stream_oaixml_to_s3(io.BytesIO(res_bytes), set_name=set_name)
         except Exception:
             reason = "Error streaming OAI-PMH response to S3"
             self.logger.exception(reason)
@@ -246,10 +182,26 @@ class Harvester:
             raise
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser("arxiver")
+    parser.add_argument(
+        'list_set', type=str,
+        help="Specific category for selective harvesting. See https://oaipmh.arxiv.org/oai?verb=ListSets. E.g. 'cs:cs:RO' to harvest robotics papers"
+    )
+    args = parser.parse_args()
+    set_name = args.list_set
+    
     logging.basicConfig(
         level=cfg.cloud.LOG_LEVEL,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
+
+    oai_parser = OAIXMLParser()
+    s3_repo = S3Repo()
     
     with psycopg.connect(cfg.DB_URL) as conn:
-        Harvester(conn).run("cs:cs:RO")
+        pipeline = PaperHarvestingPipeline(
+            conn=conn,
+            oai_parser=oai_parser,
+            s3_repo=s3_repo
+        )
+        pipeline.run(set_name=set_name)

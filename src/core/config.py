@@ -34,6 +34,7 @@ class CLOUDSettings(BaseModel):
     LOG_LEVEL: str
     AWS_REGION: str
     S3_BUCKET_NAME: str
+    SQS_QUEUE_NAME: str
 
 class Settings(BaseSettings):
     POSTGRES_USER: str

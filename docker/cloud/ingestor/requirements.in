@@ -1,0 +1,9 @@
+pydantic-settings
+python-dotenv
+psycopg[binary]
+psycopg[pool]
+requests
+boto3
+pyinstrument
+transformers
+sentence-transformers
