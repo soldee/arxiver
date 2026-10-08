@@ -60,7 +60,21 @@ aws s3api put-bucket-notification-configuration\
         "QueueConfigurations": [
         {
             "QueueArn": "'"$SQS_ARN"'",
-            "Events": ["s3:ObjectCreated:*"]
+            "Events": ["s3:ObjectCreated:*"],
+            "Filter": {
+                "Key": {
+                    "FilterRules": [
+                        {
+                            "Name": "prefix",
+                            "Value": "raw"
+                        },
+                        {
+                            "Name": "suffix",
+                            "Value": ".xml"
+                        }
+                    ]
+                }
+            }
         }
        ]
     }'
